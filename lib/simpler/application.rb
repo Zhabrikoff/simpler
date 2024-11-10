@@ -1,12 +1,11 @@
-require 'yaml'
-require 'singleton'
-require 'sequel'
-require_relative 'router'
-require_relative 'controller'
+require "yaml"
+require "singleton"
+require "sequel"
+require_relative "router"
+require_relative "controller"
 
 module Simpler
   class Application
-
     include Singleton
 
     attr_reader :db
@@ -28,6 +27,11 @@ module Simpler
 
     def call(env)
       route = @router.route_for(env)
+
+      return not_found if route.nil?
+
+      set_route_params(env, route)
+
       controller = route.controller.new(env)
       action = route.action
 
@@ -36,23 +40,31 @@ module Simpler
 
     private
 
+    def set_route_params(env, route)
+      route.add_params(env["PATH_INFO"])
+      env["simpler.route_params"] = route.params
+    end
+
+    def not_found
+      Rack::Response.new(["Not found"], 404).finish
+    end
+
     def require_app
       Dir["#{Simpler.root}/app/**/*.rb"].each { |file| require file }
     end
 
     def require_routes
-      require Simpler.root.join('config/routes')
+      require Simpler.root.join("config/routes")
     end
 
     def setup_database
-      database_config = YAML.load_file(Simpler.root.join('config/database.yml'))
-      database_config['database'] = Simpler.root.join(database_config['database'])
+      database_config = YAML.load_file(Simpler.root.join("config/database.yml"))
+      database_config["database"] = Simpler.root.join(database_config["database"])
       @db = Sequel.connect(database_config)
     end
 
     def make_response(controller, action)
       controller.make_response(action)
     end
-
   end
 end
